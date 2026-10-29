@@ -7,9 +7,6 @@ tabela de resultados — ou recusa, quando o dado não existe no schema.
 
 ![Tela do app](docs/screenshot.png)
 
-> _O arquivo `docs/screenshot.png` é um placeholder — coloque aqui um print ou
-> GIF do app rodando (input da pergunta + SQL gerado + tabela de resultados)._
-
 ---
 
 ## Stack
