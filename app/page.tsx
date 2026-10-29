@@ -11,19 +11,29 @@ type AskResponse = {
   premissa?: string;
 };
 
+const EXAMPLES = [
+  "Quais os 5 produtos mais vendidos?",
+  "Qual o faturamento total?",
+  "Quantos clientes temos por estado?",
+  "Qual a nota média de avaliação por categoria?",
+];
+
 export default function Home() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AskResponse | null>(null);
 
-  async function ask() {
+  async function ask(q?: string) {
+    const text = (q ?? question).trim();
+    if (!text) return;
+    setQuestion(text);
     setLoading(true);
     setResult(null);
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: text }),
       });
       setResult(await res.json());
     } catch (err) {
@@ -37,20 +47,14 @@ export default function Home() {
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        padding: "2.5rem",
-        maxWidth: 900,
-        margin: "0 auto",
-      }}
-    >
-      <h1>Analytics Agent</h1>
-      <p style={{ color: "#555" }}>
-        Faça uma pergunta em português sobre os dados de e-commerce.
-      </p>
+    <main className="container">
+      <header className="hero">
+        <span className="eyebrow">⌁ text-to-SQL · e-commerce</span>
+        <h1>Analytics Agent</h1>
+        <p>Pergunte em português. Ele gera o SQL, roda no Postgres e responde.</p>
+      </header>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+      <div className="ask">
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
@@ -58,158 +62,139 @@ export default function Home() {
             if (e.key === "Enter" && !loading) ask();
           }}
           placeholder="Ex: quais os 5 produtos mais vendidos?"
-          style={{
-            flex: 1,
-            padding: "0.6rem 0.8rem",
-            fontSize: 16,
-            border: "1px solid #ccc",
-            borderRadius: 6,
-          }}
+          aria-label="Pergunta"
         />
         <button
-          onClick={ask}
+          className="btn"
+          onClick={() => ask()}
           disabled={loading || !question.trim()}
-          style={{
-            padding: "0.6rem 1.2rem",
-            fontSize: 16,
-            borderRadius: 6,
-            border: "none",
-            background: loading ? "#999" : "#0070f3",
-            color: "white",
-            cursor: loading ? "default" : "pointer",
-          }}
         >
-          {loading ? "Consultando..." : "Perguntar"}
+          {loading ? (
+            <>
+              <span className="spinner" />
+              Consultando
+            </>
+          ) : (
+            "Perguntar"
+          )}
         </button>
       </div>
 
+      {!result && !loading && (
+        <div className="chips">
+          {EXAMPLES.map((ex) => (
+            <button key={ex} className="chip" onClick={() => ask(ex)}>
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+
       {result?.sql && (
-        <section style={{ marginTop: 24 }}>
-          <h3>SQL gerado</h3>
-          <pre
-            style={{
-              background: "#f5f5f5",
-              padding: "1rem",
-              borderRadius: 6,
-              overflowX: "auto",
-              fontSize: 14,
-            }}
-          >
-            {result.sql}
-          </pre>
+        <section className="section">
+          <div className="section-label">🧩 SQL gerado</div>
+          <pre className="sql">{result.sql}</pre>
+        </section>
+      )}
+
+      {result?.premissa && (
+        <section className="section">
+          <div className="callout callout-info">
+            <span className="ic">💡</span>
+            <span>
+              <strong>Interpretei como:</strong> {result.premissa}
+            </span>
+          </div>
         </section>
       )}
 
       {result?.refused && (
-        <section style={{ marginTop: 24 }}>
-          <h3 style={{ color: "#b26a00" }}>Não dá para responder</h3>
-          <p
-            style={{
-              background: "#fff8e6",
-              border: "1px solid #f0d089",
-              color: "#8a5a00",
-              padding: "1rem",
-              borderRadius: 6,
-            }}
-          >
-            {result.motivo ?? "O dado solicitado não existe no schema."}
-          </p>
+        <section className="section">
+          <div className="callout callout-warn">
+            <span className="ic">🚫</span>
+            <span>
+              <strong>Não dá para responder.</strong>{" "}
+              {result.motivo ?? "O dado solicitado não existe no schema."}
+            </span>
+          </div>
         </section>
       )}
 
       {result?.error && (
-        <section style={{ marginTop: 24 }}>
-          <h3 style={{ color: "#c00" }}>Erro</h3>
-          <pre
-            style={{
-              background: "#fff0f0",
-              color: "#c00",
-              padding: "1rem",
-              borderRadius: 6,
-              overflowX: "auto",
-              fontSize: 14,
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {result.error}
-          </pre>
+        <section className="section">
+          <div className="callout callout-error">
+            <span className="ic">⚠️</span>
+            <span>
+              <strong>Erro.</strong> {result.error}
+            </span>
+          </div>
         </section>
       )}
 
       {result && !result.error && !result.refused && (
-        <section style={{ marginTop: 24 }}>
-          {result.premissa && (
-            <p
-              style={{
-                fontSize: 13,
-                color: "#555",
-                background: "#eef4ff",
-                border: "1px solid #cbd9f5",
-                padding: "0.5rem 0.75rem",
-                borderRadius: 6,
-                marginBottom: 12,
-              }}
-            >
-              <strong>Interpretei como:</strong> {result.premissa}
-            </p>
-          )}
-          <h3>Resultados ({rows.length})</h3>
+        <section className="section">
+          <div className="result-head">
+            <h3>Resultados</h3>
+            <span className="count">{rows.length} linhas</span>
+          </div>
           {rows.length === 0 ? (
-            <p style={{ color: "#777" }}>Nenhuma linha retornada.</p>
+            <div className="table-wrap">
+              <p className="empty">Nenhuma linha retornada.</p>
+            </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  borderCollapse: "collapse",
-                  width: "100%",
-                  fontSize: 14,
-                }}
-              >
-                <thead>
-                  <tr>
-                    {columns.map((c) => (
-                      <th
-                        key={c}
-                        style={{
-                          textAlign: "left",
-                          borderBottom: "2px solid #ddd",
-                          padding: "0.5rem",
-                          background: "#fafafa",
-                        }}
-                      >
-                        {c}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr key={i}>
+            <div className="table-wrap">
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
                       {columns.map((c) => (
-                        <td
-                          key={c}
-                          style={{
-                            borderBottom: "1px solid #eee",
-                            padding: "0.5rem",
-                          }}
-                        >
-                          {formatCell(row[c])}
-                        </td>
+                        <th key={c}>{c}</th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i}>
+                        {columns.map((c) => {
+                          const v = row[c];
+                          const isNum = typeof v === "number";
+                          return (
+                            <td key={c} className={isNum ? "num" : undefined}>
+                              {formatCell(v)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </section>
       )}
+
+      <footer className="footer">
+        Next.js · Prisma · PostgreSQL · Groq ·{" "}
+        <a
+          href="https://github.com/EnzoFreitassn/analytics-agents"
+          target="_blank"
+          rel="noreferrer"
+        >
+          código no GitHub
+        </a>
+      </footer>
     </main>
   );
 }
 
 function formatCell(value: unknown): string {
-  if (value === null || value === undefined) return "";
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "number") {
+    return Number.isInteger(value)
+      ? value.toLocaleString("pt-BR")
+      : value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
