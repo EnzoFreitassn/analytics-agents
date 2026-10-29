@@ -1,0 +1,37 @@
+// Um chunk de texto curto por tabela (descrição + colunas + relacionamentos),
+// derivado de lib/schema.ts. São os "documentos" recuperáveis do RAG (tipo tabela).
+
+export type TableChunk = { table: string; text: string };
+
+export const TABLE_CHUNKS: TableChunk[] = [
+  { table: "categories", text: "categories: categorias de produto. Colunas: id (PK), name (único). Relacionamento: products.category_id -> categories.id." },
+  { table: "suppliers", text: "suppliers: fornecedores dos produtos. Colunas: id (PK), name, email (único), city, state (UF), created_at. Relacionamento: products.supplier_id -> suppliers.id (fornecedor principal)." },
+  { table: "products", text: "products: catálogo de produtos. Colunas: id (PK), name, sku (único), category_id (FK categories), supplier_id (FK suppliers), price (preço de venda atual), cost (custo de aquisição), list_price (preço de tabela/cheio), sale_price (preço promocional, pode ser nulo), created_at. ATENÇÃO: price, cost, list_price e sale_price são diferentes. Faturamento usa unit_price do pedido; margem usa (unit_price - cost)." },
+  { table: "product_suppliers", text: "product_suppliers: fornecedores alternativos de um produto. Colunas: id (PK), product_id (FK), supplier_id (FK), supply_cost (custo de fornecimento)." },
+  { table: "product_variants", text: "product_variants: variações de um produto (cor, tamanho, capacidade). Colunas: id (PK), product_id (FK), name, sku (único), price_adjustment." },
+  { table: "product_images", text: "product_images: imagens dos produtos. Colunas: id (PK), product_id (FK), url, is_primary." },
+  { table: "warehouses", text: "warehouses: centros de distribuição / armazéns. Colunas: id (PK), name, city, state (UF). Relacionamento: inventory.warehouse_id -> warehouses.id." },
+  { table: "inventory", text: "inventory: estoque de produto por armazém. Colunas: id (PK), product_id (FK), warehouse_id (FK), quantity (unidades EM ESTOQUE). Não confundir com order_items.quantity, que é venda." },
+  { table: "stores", text: "stores: lojas físicas. Colunas: id (PK), name, city, state (UF). Relacionamento: employees.store_id e orders.store_id apontam para stores.id." },
+  { table: "employees", text: "employees: funcionários. Colunas: id (PK), name, email (único), role, store_id (FK stores). NÃO há vínculo de funcionário com pedidos (não existe 'vendedor do pedido')." },
+  { table: "customers", text: "customers: clientes. Colunas: id (PK), name, email (único), city, state (UF), created_at. Relacionamentos: orders.customer_id, addresses.customer_id, reviews.customer_id, carts.customer_id, wishlists.customer_id." },
+  { table: "addresses", text: "addresses: endereços dos clientes. Colunas: id (PK), customer_id (FK), type (BILLING | SHIPPING), street, city, state (UF), zip. Usado por orders.shipping_address_id (entrega) e orders.billing_address_id (cobrança), e por shipments.address_id." },
+  { table: "orders", text: "orders: pedidos. Colunas: id (PK), customer_id (FK), store_id (FK stores, pode ser nulo), shipping_address_id (FK addresses, ENTREGA), billing_address_id (FK addresses, COBRANÇA), status (PENDING|PAID|SHIPPED|DELIVERED|CANCELLED), created_at. ATENÇÃO: shipping_address_id (entrega) é diferente de billing_address_id (cobrança). O valor do pedido não fica aqui; some os itens." },
+  { table: "order_items", text: "order_items: itens de cada pedido. Colunas: id (PK), order_id (FK), product_id (FK), quantity, unit_price (preço cobrado no pedido). Valor da linha = quantity * unit_price. Receita = SUM(quantity*unit_price)." },
+  { table: "payment_methods", text: "payment_methods: formas de pagamento. Colunas: id (PK), name (único), ex: 'Pix', 'Cartão de Crédito', 'Boleto'. Relacionamento: payments.payment_method_id -> payment_methods.id." },
+  { table: "payments", text: "payments: pagamentos recebidos (dinheiro que ENTROU). Colunas: id (PK), order_id (FK), payment_method_id (FK), amount, status (PENDING|COMPLETED|FAILED|REFUNDED), paid_at. NÃO confundir com refunds." },
+  { table: "refunds", text: "refunds: reembolsos ao cliente (dinheiro que SAIU de volta). Colunas: id (PK), payment_id (FK payments), amount (valor reembolsado), reason, created_at. Total reembolsado = SUM(refunds.amount). NÃO é payments.amount." },
+  { table: "carriers", text: "carriers: transportadoras. Colunas: id (PK), name (único), ex: 'Correios', 'Jadlog'. Relacionamento: shipments.carrier_id -> carriers.id." },
+  { table: "shipments", text: "shipments: envios/entregas dos pedidos. Colunas: id (PK), order_id (FK), carrier_id (FK carriers), address_id (FK addresses, endereço de entrega), status (PREPARING|SHIPPED|IN_TRANSIT|DELIVERED|RETURNED), shipping_cost, tracking_code, shipped_at, delivered_at." },
+  { table: "returns", text: "returns: devoluções de pedidos. Colunas: id (PK), order_id (FK), reason, status (REQUESTED|APPROVED|REJECTED|COMPLETED), created_at. Taxa de devolução compara returns com orders." },
+  { table: "return_items", text: "return_items: itens devolvidos. Colunas: id (PK), return_id (FK returns), order_item_id (FK order_items), quantity. Para devolução por produto/categoria: return_items -> order_items -> products." },
+  { table: "reviews", text: "reviews: avaliações de PRODUTO. Colunas: id (PK), product_id (FK), customer_id (FK), rating (1 a 5), comment, created_at. Nota média = AVG(rating). Não existe avaliação de atendimento/SAC." },
+  { table: "coupons", text: "coupons: cupons de desconto que o cliente aplica no checkout. Colunas: id (PK), code (único), discount_type (PERCENT|FIXED), discount_value, valid_from, valid_to, active. Uso por pedido fica em order_coupons." },
+  { table: "order_coupons", text: "order_coupons: quais cupons foram usados em quais pedidos. Colunas: id (PK), order_id (FK), coupon_id (FK coupons), amount_applied (valor de desconto aplicado no pedido). Para 'quanto foi dado em cupons', some amount_applied." },
+  { table: "promotions", text: "promotions: campanhas amplas (ex: Black Friday). Colunas: id (PK), name, description, discount_percent, starts_at, ends_at. NÃO tem FK para produto nem pedido. Diferente de coupons e discounts." },
+  { table: "discounts", text: "discounts: desconto a nível de PRODUTO. Colunas: id (PK), product_id (FK), discount_percent, starts_at, ends_at. Diferente de cupom (coupons) e de campanha (promotions)." },
+  { table: "carts", text: "carts: carrinhos de compra. Colunas: id (PK), customer_id (FK), status (ACTIVE|ABANDONED|CONVERTED), created_at. Carrinho abandonado = status ABANDONED." },
+  { table: "cart_items", text: "cart_items: itens dentro de um carrinho. Colunas: id (PK), cart_id (FK carts), product_id (FK), quantity." },
+  { table: "wishlists", text: "wishlists: listas de desejo dos clientes. Colunas: id (PK), customer_id (FK), created_at." },
+  { table: "wishlist_items", text: "wishlist_items: itens de uma wishlist. Colunas: id (PK), wishlist_id (FK wishlists), product_id (FK)." },
+];

@@ -1,0 +1,534 @@
+// Prisma schema — e-commerce "grande" (~30 tabelas) para a Etapa 4c.
+// Objetivo: criar um mundo grande o suficiente para RAG fazer sentido e
+// medir o baseline "tudo no prompt". Nomes em snake_case via @@map/@map.
+//
+// ATENÇÃO: há campos/tabelas CONFUNDÍVEIS de propósito, para estressar a
+// escolha do modelo:
+//   - products.price vs cost vs list_price vs sale_price
+//   - coupons vs promotions vs discounts
+//   - orders.shipping_address_id vs billing_address_id
+//   - payments vs refunds
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum AddressType {
+  BILLING
+  SHIPPING
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ShipmentStatus {
+  PREPARING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum CartStatus {
+  ACTIVE
+  ABANDONED
+  CONVERTED
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo
+// ---------------------------------------------------------------------------
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  products Product[]
+
+  @@map("categories")
+}
+
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String?  @unique
+  city      String?
+  state     String?  @db.Char(2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  products         Product[] // fornecedor principal
+  productSuppliers ProductSupplier[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id         Int      @id @default(autoincrement())
+  name       String
+  sku        String?  @unique
+  categoryId Int      @map("category_id")
+  supplierId Int?     @map("supplier_id") // fornecedor principal
+  // CONFUNDÍVEIS de preço/custo:
+  price      Decimal  @db.Decimal(10, 2) // preço de venda atual
+  cost       Decimal  @db.Decimal(10, 2) // custo de aquisição
+  listPrice  Decimal? @map("list_price") @db.Decimal(10, 2) // preço de tabela (cheio)
+  salePrice  Decimal? @map("sale_price") @db.Decimal(10, 2) // preço promocional vigente
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  category         Category          @relation(fields: [categoryId], references: [id])
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id])
+  orderItems       OrderItem[]
+  variants         ProductVariant[]
+  images           ProductImage[]
+  inventory        Inventory[]
+  reviews          Review[]
+  discounts        Discount[]
+  cartItems        CartItem[]
+  wishlistItems    WishlistItem[]
+  productSuppliers ProductSupplier[]
+
+  @@index([categoryId])
+  @@index([supplierId])
+  @@map("products")
+}
+
+model ProductSupplier {
+  id         Int     @id @default(autoincrement())
+  productId  Int     @map("product_id")
+  supplierId Int     @map("supplier_id")
+  supplyCost Decimal @map("supply_cost") @db.Decimal(10, 2)
+
+  product  Product  @relation(fields: [productId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([productId, supplierId])
+  @@map("product_suppliers")
+}
+
+model ProductVariant {
+  id              Int     @id @default(autoincrement())
+  productId       Int     @map("product_id")
+  name            String // ex: "128GB / Preto"
+  sku             String? @unique
+  priceAdjustment Decimal @default(0) @map("price_adjustment") @db.Decimal(10, 2)
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id        Int     @id @default(autoincrement())
+  productId Int     @map("product_id")
+  url       String
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// ---------------------------------------------------------------------------
+// Estoque / logística interna
+// ---------------------------------------------------------------------------
+
+model Warehouse {
+  id    Int    @id @default(autoincrement())
+  name  String
+  city  String
+  state String @db.Char(2)
+
+  inventory Inventory[]
+
+  @@map("warehouses")
+}
+
+model Inventory {
+  id          Int @id @default(autoincrement())
+  productId   Int @map("product_id")
+  warehouseId Int @map("warehouse_id")
+  quantity    Int // unidades em estoque
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([productId, warehouseId])
+  @@map("inventory")
+}
+
+model Store {
+  id    Int    @id @default(autoincrement())
+  name  String
+  city  String
+  state String @db.Char(2)
+
+  employees Employee[]
+  orders    Order[]
+
+  @@map("stores")
+}
+
+model Employee {
+  id      Int     @id @default(autoincrement())
+  name    String
+  email   String? @unique
+  role    String
+  storeId Int?    @map("store_id")
+
+  store Store? @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@map("employees")
+}
+
+// ---------------------------------------------------------------------------
+// Clientes / endereços
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  city      String
+  state     String   @db.Char(2) // UF
+  createdAt DateTime @default(now()) @map("created_at")
+
+  orders    Order[]
+  addresses Address[]
+  reviews   Review[]
+  carts     Cart[]
+  wishlists Wishlist[]
+
+  @@map("customers")
+}
+
+model Address {
+  id         Int         @id @default(autoincrement())
+  customerId Int         @map("customer_id")
+  type       AddressType
+  street     String
+  city       String
+  state      String      @db.Char(2)
+  zip        String
+
+  customer       Customer   @relation(fields: [customerId], references: [id])
+  ordersShipping Order[]    @relation("OrderShipping")
+  ordersBilling  Order[]    @relation("OrderBilling")
+  shipments      Shipment[]
+
+  @@index([customerId])
+  @@map("addresses")
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos
+// ---------------------------------------------------------------------------
+
+model Order {
+  id                Int         @id @default(autoincrement())
+  customerId        Int         @map("customer_id")
+  storeId           Int?        @map("store_id")
+  // CONFUNDÍVEIS de endereço:
+  shippingAddressId Int?        @map("shipping_address_id")
+  billingAddressId  Int?        @map("billing_address_id")
+  status            OrderStatus @default(PENDING)
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  store           Store?        @relation(fields: [storeId], references: [id])
+  shippingAddress Address?      @relation("OrderShipping", fields: [shippingAddressId], references: [id])
+  billingAddress  Address?      @relation("OrderBilling", fields: [billingAddressId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  shipments       Shipment[]
+  returns         Return[]
+  orderCoupons    OrderCoupon[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int     @map("order_id")
+  productId Int     @map("product_id")
+  quantity  Int
+  unitPrice Decimal @map("unit_price") @db.Decimal(10, 2) // preço cobrado no pedido
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id])
+  returnItems ReturnItem[]
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Pagamentos / reembolsos (CONFUNDÍVEIS: payment vs refund)
+// ---------------------------------------------------------------------------
+
+model PaymentMethod {
+  id   Int    @id @default(autoincrement())
+  name String @unique // ex: "Cartão de Crédito", "Pix", "Boleto"
+
+  payments Payment[]
+
+  @@map("payment_methods")
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  orderId         Int           @map("order_id")
+  paymentMethodId Int           @map("payment_method_id")
+  amount          Decimal       @db.Decimal(10, 2)
+  status          PaymentStatus @default(COMPLETED)
+  paidAt          DateTime      @default(now()) @map("paid_at")
+
+  order         Order         @relation(fields: [orderId], references: [id])
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  refunds       Refund[]
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Refund {
+  id        Int      @id @default(autoincrement())
+  paymentId Int      @map("payment_id")
+  amount    Decimal  @db.Decimal(10, 2) // valor reembolsado (NÃO é o pagamento)
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+// ---------------------------------------------------------------------------
+// Envio
+// ---------------------------------------------------------------------------
+
+model Carrier {
+  id   Int    @id @default(autoincrement())
+  name String @unique // ex: "Correios", "Jadlog"
+
+  shipments Shipment[]
+
+  @@map("carriers")
+}
+
+model Shipment {
+  id           Int            @id @default(autoincrement())
+  orderId      Int            @map("order_id")
+  carrierId    Int            @map("carrier_id")
+  addressId    Int?           @map("address_id") // endereço de entrega usado
+  status       ShipmentStatus @default(PREPARING)
+  shippingCost Decimal        @map("shipping_cost") @db.Decimal(10, 2)
+  trackingCode String?        @map("tracking_code")
+  shippedAt    DateTime?      @map("shipped_at")
+  deliveredAt  DateTime?      @map("delivered_at")
+
+  order   Order    @relation(fields: [orderId], references: [id])
+  carrier Carrier  @relation(fields: [carrierId], references: [id])
+  address Address? @relation(fields: [addressId], references: [id])
+
+  @@index([orderId])
+  @@index([carrierId])
+  @@map("shipments")
+}
+
+// ---------------------------------------------------------------------------
+// Devoluções
+// ---------------------------------------------------------------------------
+
+model Return {
+  id        Int          @id @default(autoincrement())
+  orderId   Int          @map("order_id")
+  reason    String?
+  status    ReturnStatus @default(REQUESTED)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  order Order        @relation(fields: [orderId], references: [id])
+  items ReturnItem[]
+
+  @@index([orderId])
+  @@map("returns")
+}
+
+model ReturnItem {
+  id          Int @id @default(autoincrement())
+  returnId    Int @map("return_id")
+  orderItemId Int @map("order_item_id")
+  quantity    Int
+
+  return    Return    @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+
+  @@index([returnId])
+  @@map("return_items")
+}
+
+// ---------------------------------------------------------------------------
+// Avaliações
+// ---------------------------------------------------------------------------
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @map("product_id")
+  customerId Int      @map("customer_id")
+  rating     Int // 1 a 5
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  product  Product  @relation(fields: [productId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ---------------------------------------------------------------------------
+// Cupons / promoções / descontos (CONFUNDÍVEIS DE PROPÓSITO)
+// ---------------------------------------------------------------------------
+
+model Coupon {
+  id            Int          @id @default(autoincrement())
+  code          String       @unique // ex: "BEMVINDO10"
+  discountType  DiscountType @map("discount_type")
+  discountValue Decimal      @map("discount_value") @db.Decimal(10, 2)
+  validFrom     DateTime     @map("valid_from")
+  validTo       DateTime     @map("valid_to")
+  active        Boolean      @default(true)
+
+  orderCoupons OrderCoupon[]
+
+  @@map("coupons")
+}
+
+model Promotion {
+  id              Int      @id @default(autoincrement())
+  name            String // campanha ampla, ex: "Black Friday"
+  description     String?
+  discountPercent Decimal  @map("discount_percent") @db.Decimal(5, 2)
+  startsAt        DateTime @map("starts_at")
+  endsAt          DateTime @map("ends_at")
+
+  @@map("promotions")
+}
+
+model Discount {
+  id              Int      @id @default(autoincrement())
+  productId       Int      @map("product_id") // desconto a nível de PRODUTO
+  discountPercent Decimal  @map("discount_percent") @db.Decimal(5, 2)
+  startsAt        DateTime @map("starts_at")
+  endsAt          DateTime @map("ends_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("discounts")
+}
+
+model OrderCoupon {
+  id            Int     @id @default(autoincrement())
+  orderId       Int     @map("order_id")
+  couponId      Int     @map("coupon_id")
+  amountApplied Decimal @map("amount_applied") @db.Decimal(10, 2) // valor de desconto aplicado
+
+  order  Order  @relation(fields: [orderId], references: [id])
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@unique([orderId, couponId])
+  @@map("order_coupons")
+}
+
+// ---------------------------------------------------------------------------
+// Carrinhos / wishlist
+// ---------------------------------------------------------------------------
+
+model Cart {
+  id         Int        @id @default(autoincrement())
+  customerId Int        @map("customer_id")
+  status     CartStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  customer Customer   @relation(fields: [customerId], references: [id])
+  items    CartItem[]
+
+  @@index([customerId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        Int @id @default(autoincrement())
+  cartId    Int @map("cart_id")
+  productId Int @map("product_id")
+  quantity  Int
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Wishlist {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @map("customer_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer Customer       @relation(fields: [customerId], references: [id])
+  items    WishlistItem[]
+
+  @@index([customerId])
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         Int @id @default(autoincrement())
+  wishlistId Int @map("wishlist_id")
+  productId  Int @map("product_id")
+
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@unique([wishlistId, productId])
+  @@map("wishlist_items")
+}

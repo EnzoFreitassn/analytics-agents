@@ -1,0 +1,40 @@
+{
+  "name": "analytics-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.2.1",
+    "@xenova/transformers": "^2.17.2",
+    "next": "^15.5.28",
+    "openai": "^7.45.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "9.3.0",
+    "@types/node": "22.10.2",
+    "@types/react": "19.0.2",
+    "@types/react-dom": "19.0.2",
+    "eslint": "9.17.0",
+    "eslint-config-next": "^15.5.28",
+    "prisma": "6.2.1",
+    "ts-node": "10.9.2",
+    "typescript": "5.7.2"
+  }
+}

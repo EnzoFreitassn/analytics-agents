@@ -1,0 +1,38 @@
+[
+  { "id": "q01", "pergunta": "Quantos fornecedores temos cadastrados?", "categoria": "facil", "observacao": "COUNT(*) em suppliers." },
+  { "id": "q02", "pergunta": "Quantas avaliações de produtos foram feitas?", "categoria": "facil", "observacao": "COUNT(*) em reviews." },
+  { "id": "q03", "pergunta": "Quantos pedidos foram feitos no total?", "categoria": "facil", "observacao": "COUNT(*) em orders = 1200." },
+  { "id": "q04", "pergunta": "Quantos clientes temos por estado?", "categoria": "facil", "observacao": "customers GROUP BY state." },
+  { "id": "q05", "pergunta": "Qual o faturamento total?", "categoria": "regra_negocio", "observacao": "SUM(order_items.quantity*unit_price) em pedidos PAID/SHIPPED/DELIVERED (excluir CANCELLED)." },
+  { "id": "q06", "pergunta": "Qual o lucro total?", "categoria": "regra_negocio", "observacao": "SUM(quantity*(unit_price - products.cost)) nos pedidos faturados. Usar cost (não list_price/sale_price)." },
+  { "id": "q07", "pergunta": "Quantos pedidos foram entregues?", "categoria": "regra_negocio", "observacao": "COUNT em orders WHERE status='DELIVERED'." },
+
+  { "id": "q08", "pergunta": "Quanto foi concedido em cupons nos pedidos?", "categoria": "confusavel", "observacao": "CERTO: SUM(order_coupons.amount_applied). ERRADO: usar promotions ou discounts ou list_price/sale_price." },
+  { "id": "q09", "pergunta": "Qual o total já reembolsado aos clientes?", "categoria": "confusavel", "observacao": "CERTO: SUM(refunds.amount). ERRADO: usar payments.amount." },
+  { "id": "q10", "pergunta": "Qual o preço de tabela médio dos produtos?", "categoria": "confusavel", "observacao": "CERTO: AVG(products.list_price). ERRADO: usar price, cost ou sale_price." },
+  { "id": "q11", "pergunta": "Em quais cidades os pedidos foram entregues com mais frequência?", "categoria": "confusavel", "observacao": "CERTO: usar orders.shipping_address_id -> addresses.city. ERRADO: usar billing_address_id ou customers.city." },
+  { "id": "q12", "pergunta": "Qual transportadora entregou mais pedidos?", "categoria": "confusavel", "observacao": "CERTO: shipments JOIN carriers WHERE shipment status DELIVERED, GROUP BY carrier. Não confundir com stores." },
+  { "id": "q13", "pergunta": "Qual método de pagamento é o mais usado?", "categoria": "confusavel", "observacao": "CERTO: payments JOIN payment_methods GROUP BY método. Agora o dado existe (não recusar)." },
+  { "id": "q14", "pergunta": "Quantas unidades temos em estoque no total?", "categoria": "confusavel", "observacao": "CERTO: SUM(inventory.quantity). ERRADO: somar order_items.quantity (isso é venda, não estoque)." },
+
+  { "id": "q15", "pergunta": "Quais os melhores clientes?", "categoria": "ambigua", "observacao": "Ambíguo (valor gasto vs nº de pedidos). Responder com premissa." },
+  { "id": "q16", "pergunta": "Qual a categoria mais popular?", "categoria": "ambigua", "observacao": "Ambíguo (unidades vs receita vs nº de produtos). Responder com premissa." },
+  { "id": "q17", "pergunta": "Qual o melhor produto?", "categoria": "ambigua", "observacao": "Ambíguo (receita vs unidades vs lucro vs nota média). Responder com premissa." },
+
+  { "id": "q18", "pergunta": "Qual o crescimento da receita mês a mês nos últimos 12 meses?", "categoria": "multi_passo", "observacao": "date_trunc('month', orders.created_at), SUM, LAG para variação. Excluir cancelados." },
+  { "id": "q19", "pergunta": "Que porcentagem do faturamento cada categoria representa?", "categoria": "multi_passo", "observacao": "receita por categoria / total * 100. order_items->products->categories." },
+  { "id": "q20", "pergunta": "Quais os 5 produtos mais vendidos e quanto cada um faturou?", "categoria": "multi_passo", "observacao": "Top 5 por SUM(quantity) + SUM(quantity*unit_price)." },
+  { "id": "q21", "pergunta": "Qual a nota média de avaliação por categoria?", "categoria": "multi_passo", "observacao": "AVG(reviews.rating) agrupado por categoria (reviews->products->categories)." },
+  { "id": "q22", "pergunta": "Qual a taxa de devolução por categoria?", "categoria": "multi_passo", "observacao": "return_items->order_items->products->categories; proporção de itens/pedidos devolvidos por categoria." },
+  { "id": "q23", "pergunta": "Qual o valor total em estoque a preço de custo, por armazém?", "categoria": "multi_passo", "observacao": "SUM(inventory.quantity * products.cost) GROUP BY warehouse." },
+
+  { "id": "q24", "pergunta": "Qual o ticket médio por pedido?", "categoria": "fraseado", "observacao": "AVG do total por pedido (subquery/CTE por order_id, depois AVG)." },
+  { "id": "q25", "pergunta": "Qual o ticket médio por cliente?", "categoria": "fraseado", "observacao": "Gasto total por cliente e então média entre clientes. Diferente de por pedido." },
+
+  { "id": "q26", "pergunta": "Quantos produtos estão sem estoque?", "categoria": "regra_negocio", "observacao": "Produtos com estoque total 0 (SUM(inventory.quantity)=0 ou sem linha de inventory)." },
+  { "id": "q27", "pergunta": "Quantos carrinhos foram abandonados?", "categoria": "facil", "observacao": "COUNT em carts WHERE status='ABANDONED'." },
+
+  { "id": "q28", "pergunta": "Qual o custo de aquisição de clientes (CAC) por mês?", "categoria": "alucinacao", "observacao": "RECUSAR: não há dados de gasto com marketing/aquisição no schema." },
+  { "id": "q29", "pergunta": "De qual canal de marketing vêm mais vendas?", "categoria": "alucinacao", "observacao": "RECUSAR: não existe origem/canal de marketing em lugar nenhum do schema." },
+  { "id": "q30", "pergunta": "Qual a nota de satisfação do atendimento ao cliente (SAC)?", "categoria": "alucinacao", "observacao": "RECUSAR: reviews são de PRODUTO; não há avaliação de atendimento/SAC. Não confundir com reviews." }
+]
